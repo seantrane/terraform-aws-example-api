@@ -92,9 +92,7 @@
   },
   "husky": {
     "hooks": {
-      "commit-msg": "commitlint -E HUSKY_GIT_PARAMS",
-      "post-merge": "./cli -i",
-      "pre-push": "./cli -b -t --env=dev"
+      "commit-msg": "commitlint -E HUSKY_GIT_PARAMS"
     }
   },
   "release": {
