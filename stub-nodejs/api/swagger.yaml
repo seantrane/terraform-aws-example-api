@@ -1,0 +1,218 @@
+---
+swagger: "2.0"
+info:
+  description: "This is a simple API server test."
+  version: "1.0.0"
+  title: "Example API"
+  license:
+    name: "Apache 2.0"
+    url: "http://www.apache.org/licenses/LICENSE-2.0.html"
+host: "localhost"
+tags:
+- name: "health"
+  description: "Check the health of API."
+schemes:
+- "https"
+- "http"
+paths:
+  /health/:
+    get:
+      tags:
+      - "health"
+      summary: "API Healthcheck"
+      description: "Check the health of API."
+      operationId: "health"
+      produces:
+      - "application/json"
+      - "application/vnd.api+json"
+      parameters: []
+      responses:
+        200:
+          description: "API is healthy."
+          schema:
+            $ref: "#/definitions/ApiResponse"
+        400:
+          description: "Bad request."
+        401:
+          description: "Access is unauthorized."
+        403:
+          description: "Access is forbidden."
+        404:
+          description: "Resource was not found."
+          schema:
+            $ref: "#/definitions/JsonApiResponse"
+        500:
+          description: "API is not available."
+      x-swagger-router-controller: "Health"
+definitions:
+  ApiResponse:
+    type: "object"
+    properties:
+      code:
+        type: "integer"
+        format: "int32"
+      message:
+        type: "string"
+      data:
+        type: "object"
+        properties: {}
+      timestamp:
+        type: "integer"
+        format: "int32"
+      type:
+        type: "string"
+    example:
+      code: 200
+      message: "Testing"
+      timestamp: 946684800
+      type: "String"
+  JsonApiResponse:
+    type: "object"
+    properties:
+      data:
+        description: "The document's primary data."
+      errors:
+        type: "array"
+        description: "An array of error objects."
+        items:
+          $ref: "#/definitions/JsonApiResponseError"
+      meta:
+        description: "A meta object that contains non-standard meta-information."
+      jsonapi:
+        description: "An object describing the server's implementation."
+      links:
+        $ref: "#/definitions/JsonApiResponse_links"
+      included:
+        type: "object"
+        description: "An array of resource objects that are related to the primary\
+          \ data and/or each other (included resources). If a document does not contain\
+          \ a top-level data key, the included member MUST NOT be present either."
+        additionalProperties:
+          $ref: "#/definitions/JsonApiResponseResourceObject"
+    description: "JSON API Response object. (http://jsonapi.org/format/)"
+  JsonApiResponseLink:
+    type: "object"
+    properties:
+      href:
+        type: "string"
+        description: "A string containing the link's URL."
+      meta:
+        description: "A meta object containing non-standard meta-information about\
+          \ the link."
+    description: "JSON API Response Link object. (https://jsonapi.org/format/#document-links)"
+  JsonApiResponseError:
+    type: "object"
+    properties:
+      id:
+        type: "string"
+        description: "A unique identifier (number|string) for this particular occurrence\
+          \ of the problem."
+      links:
+        $ref: "#/definitions/JsonApiResponseError_links"
+      status:
+        type: "string"
+        description: "The HTTP status code applicable to this problem, expressed as\
+          \ a string value."
+      code:
+        type: "string"
+        description: "An application-specific error code, expressed as a string value."
+      title:
+        type: "string"
+        description: "A short, human-readable summary of the problem that SHOULD NOT\
+          \ change from occurrence to occurrence of the problem, except for purposes\
+          \ of localization."
+      detail:
+        type: "string"
+        description: "A human-readable explanation specific to this occurrence of\
+          \ the problem."
+      source:
+        type: "object"
+        description: "An object containing references to the source of the error."
+        additionalProperties:
+          type: "string"
+          description: "Any additional source references."
+      meta:
+        description: "A meta object that contains non-standard meta-information."
+    description: "JSON API Response Error object. (https://jsonapi.org/format/#error-objects)"
+  JsonApiResponseResourceObject:
+    type: "object"
+    properties:
+      id:
+        type: "string"
+        description: "Exception: The `id` member is not required when the resource\
+          \ object originates at the client and represents a new resource to be created\
+          \ on the server."
+      type:
+        type: "string"
+        description: "A resource object type."
+      attributes:
+        description: "An `attributes` object representing some of the resource's data.\n\
+          Members of the `attributes` object represent information about the resource\
+          \ object in which it's defined.\nAttributes may contain any valid JSON value.\n\
+          Complex data structures involving JSON objects and arrays are allowed as\
+          \ attribute values. However, any object that constitutes or is contained\
+          \ in an attribute MUST NOT contain a relationships or links member, as those\
+          \ members are reserved by this specification for future use."
+      relationships:
+        type: "object"
+        description: "A `relationships` object describing relationships between the\
+          \ resource and other JSON API resources.\nThe value of the relationships\
+          \ key MUST be a Relationship object.\nMembers of the relationships object\
+          \ (\"relationships\") represent references from the resource object in which\
+          \ it’s defined to other resource objects.\nRelationships may be to-one or\
+          \ to-many."
+        additionalProperties:
+          $ref: "#/definitions/JsonApiResponseRelationship"
+      links:
+        type: "object"
+        description: "A `links` object containing links related to the resource."
+        additionalProperties:
+          $ref: "#/definitions/JsonApiResponseLink"
+      meta:
+        description: "A `meta` object containing non-standard meta-information about\
+          \ a resource that can not be represented as an attribute or relationship."
+    description: "JSON API Resource object. (http://jsonapi.org/format/#document-resource-objects)\n\
+      \nA resource object MUST contain at least the following top-level members; `id`,\
+      \ `type`.\n\nIn addition, a resource object MAY contain any of these top-level\
+      \ members; A resource object's attributes and its relationships are collectively\
+      \ called its 'fields'.\nFields for a resource object MUST share a common namespace\
+      \ with each other and with `type` and `id`.\nIn other words, a resource can\
+      \ not have an attribute and relationship with the same name, nor can it have\
+      \ an `attribute` or `relationship` named `type` or `id`."
+  JsonApiResponseRelationship:
+    type: "object"
+    properties:
+      links:
+        type: "object"
+        description: "A `links` object containing links related to the resource."
+        additionalProperties:
+          $ref: "#/definitions/JsonApiResponseLink"
+      self:
+        description: "A link for the relationship itself (a \"relationship link\"\
+          ).\nThis link allows the client to directly manipulate the relationship.\
+          \ For example, removing an author through an article’s relationship URL\
+          \ would disconnect the person from the article without deleting the people\
+          \ resource itself. When fetched successfully, this link returns the linkage\
+          \ for the related resources as its primary data. (See Fetching Relationships.)"
+      related:
+        description: "A related resource link."
+      data:
+        description: "Resource linkage."
+      meta:
+        description: "A meta object that contains non-standard meta-information about\
+          \ the relationship."
+    description: "JSON API Relationship object. (http://jsonapi.org/format/#document-resource-object-relationships)\n\
+      \nA relationship object MUST contain at least one of the described properties."
+  JsonApiResponse_links:
+    properties:
+      self:
+        $ref: "#/definitions/JsonApiResponseLink"
+      related:
+        $ref: "#/definitions/JsonApiResponseLink"
+    description: "A links object related to the primary data. (https://jsonapi.org/format/#document-links)"
+  JsonApiResponseError_links:
+    properties:
+      about:
+        $ref: "#/definitions/JsonApiResponseLink"
+    description: "A links object containing an 'about' property; a link that leads\
+      \ to further details about this particular occurrence of the problem."

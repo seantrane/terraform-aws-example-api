@@ -1,0 +1,251 @@
+swagger: "2.0"
+info:
+  description: "This is a simple API server test."
+  version: "1.0.0"
+  title: "Example API"
+  license:
+    name: "Apache 2.0"
+    url: "http://www.apache.org/licenses/LICENSE-2.0.html"
+host: "localhost"
+# basePath: "/v1"
+tags:
+- name: "health"
+  description: "Check the health of API."
+schemes:
+- "https"
+- "http"
+paths:
+  /health/:
+    get:
+      tags:
+      - "health"
+      summary: "API Healthcheck"
+      description: "Check the health of API."
+      operationId: "health"
+      produces:
+      - "application/json"
+      - "application/vnd.api+json"
+      responses:
+        200:
+          description: "API is healthy."
+          schema:
+            $ref: "#/definitions/ApiResponse"
+        400:
+          description: "Bad request."
+        401:
+          description: "Access is unauthorized."
+        403:
+          description: "Access is forbidden."
+        404:
+          description: "Resource was not found."
+          schema:
+            $ref: "#/definitions/JsonApiResponse"
+        500:
+          description: "API is not available."
+definitions:
+  ApiResponse:
+    type: "object"
+    properties:
+      code:
+        type: "integer"
+        format: "int32"
+      message:
+        type: "string"
+      data:
+        type: "object"
+      timestamp:
+        type: "integer"
+        format: "int32"
+      type:
+        type: "string"
+    example:
+      code: 200
+      message: "Testing"
+      timestamp: 946684800
+      type: "String"
+  JsonApiResponse:
+    description: "JSON API Response object. (http://jsonapi.org/format/)"
+    type: "object"
+    properties:
+      # http://jsonapi.org/format/#document-top-level
+      # A document MUST contain at least one of the following top-level members:
+      # (The members data and errors MUST NOT coexist in the same document)
+      data:
+        description: "The document's primary data."
+      errors:
+        description: "An array of error objects."
+        type: "array"
+        items:
+          $ref: "#/definitions/JsonApiResponseError"
+      meta:
+        description: "A meta object that contains non-standard meta-information."
+      # A document MAY contain any of these top-level members:
+      jsonapi:
+        description: "An object describing the server's implementation."
+      links:
+        description: "A links object related to the primary data. (https://jsonapi.org/format/#document-links)"
+        type: "object"
+        properties:
+          self:
+            # description: "The link that generated the current response document"
+            # oneOf:
+            # - type: "string"
+            # - $ref: "#/definitions/JsonApiResponseLink"
+            $ref: "#/definitions/JsonApiResponseLink"
+          related:
+            # description: "A related resource link when the primary data represents a resource relationship"
+            # oneOf:
+            # - type: "string"
+            # - $ref: "#/definitions/JsonApiResponseLink"
+            $ref: "#/definitions/JsonApiResponseLink"
+      included:
+        description: "An array of resource objects that are related to the primary data and/or each other (included resources). If a document does not contain a top-level data key, the included member MUST NOT be present either."
+        type: "object"
+        additionalProperties:
+          $ref: "#/definitions/JsonApiResponseResourceObject"
+  JsonApiResponseLink:
+    description: "JSON API Response Link object. (https://jsonapi.org/format/#document-links)"
+    type: "object"
+    properties:
+      href:
+        description: "A string containing the link's URL."
+        type: "string"
+      meta:
+        description: "A meta object containing non-standard meta-information about the link."
+  JsonApiResponseError:
+    description: "JSON API Response Error object. (https://jsonapi.org/format/#error-objects)"
+    type: "object"
+    properties:
+      id:
+        description: "A unique identifier (number|string) for this particular occurrence of the problem."
+        type: "string"
+        # oneOf:
+        # - type: "number"
+        # - type: "string"
+      links:
+        description: "A links object containing an 'about' property; a link that leads to further details about this particular occurrence of the problem."
+        type: "object"
+        properties:
+          about:
+            $ref: "#/definitions/JsonApiResponseLink"
+      status:
+        description: "The HTTP status code applicable to this problem, expressed as a string value."
+        type: "string"
+      code:
+        description: "An application-specific error code, expressed as a string value."
+        type: "string"
+      title:
+        description: "A short, human-readable summary of the problem that SHOULD NOT change from occurrence to occurrence of the problem, except for purposes of localization."
+        type: "string"
+      detail:
+        description: "A human-readable explanation specific to this occurrence of the problem."
+        type: "string"
+      source:
+        description: "An object containing references to the source of the error."
+        type: "object"
+        properties:
+          pointer:
+            description: "A JSON Pointer [RFC6901] to the associated entity in the request document [e.g. `/data` for a primary data object, or `/data/attributes/title` for a specific attribute]."
+            type: "string"
+          parameter:
+            description: "A string indicating which URI query parameter caused the error."
+            type: "string"
+        additionalProperties:
+          description: "Any additional source references."
+          type: "string"
+      meta:
+        description: "A meta object that contains non-standard meta-information."
+  JsonApiResponseResourceObject:
+    description: >-
+      JSON API Resource object. (http://jsonapi.org/format/#document-resource-objects)
+      
+      
+      A resource object MUST contain at least the following top-level members; `id`, `type`.
+      
+      
+      In addition, a resource object MAY contain any of these top-level members;
+      A resource object's attributes and its relationships are collectively called its 'fields'.
+      
+      Fields for a resource object MUST share a common namespace with each other and with `type` and `id`.
+      
+      In other words, a resource can not have an attribute and relationship with
+      the same name, nor can it have an `attribute` or `relationship` named `type` or `id`.
+    type: "object"
+    properties:
+      # A resource object MUST contain at least the following top-level members:
+      id:
+        description: "Exception: The `id` member is not required when the resource object originates at the client and represents a new resource to be created on the server."
+        type: "string"
+        # oneOf:
+        # - type: "string"
+        # - type: "number"
+      type:
+        description: "A resource object type."
+        type: "string"
+      attributes:
+        description: >-
+          An `attributes` object representing some of the resource's data.
+          
+          Members of the `attributes` object represent information about
+          the resource object in which it's defined.
+          
+          Attributes may contain any valid JSON value.
+          
+          Complex data structures involving JSON objects and arrays are allowed
+          as attribute values. However, any object that constitutes or is contained
+          in an attribute MUST NOT contain a relationships or links member, as those
+          members are reserved by this specification for future use.
+      relationships:
+        description: >-
+          A `relationships` object describing relationships between
+          the resource and other JSON API resources.
+          
+          The value of the relationships key MUST be a Relationship object.
+          
+          Members of the relationships object ("relationships") represent references
+          from the resource object in which it’s defined to other resource objects.
+          
+          Relationships may be to-one or to-many.
+        type: "object"
+        additionalProperties:
+          $ref: "#/definitions/JsonApiResponseRelationship"
+      links:
+        description: "A `links` object containing links related to the resource."
+        type: "object"
+        additionalProperties:
+          # oneOf:
+          # - type: "string"
+          # - $ref: "#/definitions/JsonApiResponseLink"
+          $ref: "#/definitions/JsonApiResponseLink"
+      meta:
+        description: "A `meta` object containing non-standard meta-information about a resource that can not be represented as an attribute or relationship."
+  JsonApiResponseRelationship:
+    description: >-
+      JSON API Relationship object. (http://jsonapi.org/format/#document-resource-object-relationships)
+      
+      
+      A relationship object MUST contain at least one of the described properties.
+    type: "object"
+    properties:
+      links:
+        description: "A `links` object containing links related to the resource."
+        type: "object"
+        additionalProperties:
+          # oneOf:
+          # - type: "string"
+          # - $ref: "#/definitions/JsonApiResponseLink"
+          $ref: "#/definitions/JsonApiResponseLink"
+      self:
+        description: >-
+          A link for the relationship itself (a "relationship link").
+          
+          This link allows the client to directly manipulate the relationship. For example, removing
+          an author through an article’s relationship URL would disconnect the person from the article
+          without deleting the people resource itself. When fetched successfully, this link returns
+          the linkage for the related resources as its primary data. (See Fetching Relationships.)
+      related:
+        description: "A related resource link."
+      data:
+        description: "Resource linkage."
+      meta:
+        description: "A meta object that contains non-standard meta-information about the relationship."
