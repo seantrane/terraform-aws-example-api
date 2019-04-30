@@ -1,0 +1,858 @@
+#!/usr/bin/env bash
+# shellcheck disable=SC2034
+# --------------------------------------------------------------------------------------------------
+# ==================================================================================================
+# **************************************************************************************************
+#
+#    ,ad8888ba,   88           88
+#   d8"'    `"8b  88           88
+#  d8'            88           88
+#  88             88           88
+#  88             88           88
+#  Y8,            88           88
+#   Y8a.    .a8P  88           88
+#    `"Y8888Y"'   88888888888  88
+#
+# ==================================================================================================
+# Command-line interface starter-kit.
+#
+# See README file for more information.
+# ==================================================================================================
+
+set -o errexit # exit if a command fails
+set -o pipefail # return exit status of last command
+[[ -n "${NOUNSET:-}" ]] && set -o nounset # exit if using undeclared variable
+[[ -n "${TRACE:-}" ]] && set -o xtrace # trace of command execution
+IFS=$'\n\t' # (Internal Field Separator) better word splitting
+
+__DIR=$( cd "${BASH_SOURCE%/*}" && pwd ) # path to script directory
+__FILE="${__DIR}/$(basename "${BASH_SOURCE[0]}")" # path to script file
+__BASE="$(basename "$__FILE" .sh)" # filename of script
+__DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ") # timestamp
+
+# --------------------------------------------------------------------------------------------------
+# CHECK/LOAD/SET SCRIPT REQUIREMENTS
+# --------------------------------------------------------------------------------------------------
+
+! type "npm" &> /dev/null && echo "!!! Please install npm before running this script !!!" && exit 1
+! type "docker" &> /dev/null && echo "!!! Please install docker before running this script !!!" && exit 1
+! type "terraform" &> /dev/null && echo "!!! Please install terraform before running this script !!!" && exit 1
+! type "aws" &> /dev/null && echo "!!! Please install aws-cli before running this script !!!" && exit 1
+
+# shellcheck disable=SC1090,SC1091
+. "${__DIR}/scripts/functions.sh" || exit
+
+# Start script timer
+start=$(date +%s)
+
+echo "CLI script started (${__DATE})" && echo ""
+
+# --------------------------------------------------------------------------------------------------
+# ==================================================================================================
+# **************************************************************************************************
+#
+#  88888888888  888b      88  8b           d8
+#  88           8888b     88  `8b         d8'
+#  88           88 `8b    88   `8b       d8'
+#  88aaaaa      88  `8b   88    `8b     d8'
+#  88"""""      88   `8b  88     `8b   d8'
+#  88           88    `8b 88      `8b d8'
+#  88           88     `8888       `888'
+#  88888888888  88      `888        `8'
+#
+# --------------------------------------------------------------------------------------------------
+# TOGGLES / SPECIAL VARIABLES GO HERE:
+# --------------------------------------------------------------------------------------------------
+
+TEMP_PATH="${__DIR}/temp"
+TEMP_BUILD_PATH="${TEMP_PATH}/build"
+TERRAFORM_PATH="${__DIR}/terraform"
+
+# Get environment variables from `.env` file, if available.
+load_vars "${__DIR}/.env"
+
+# Get private variables/credentials from `.localrc` file, if available.
+load_vars "${__DIR}/.localrc"
+
+# **************************************************************************************************
+# ==================================================================================================
+# --------------------------------------------------------------------------------------------------
+
+
+# --------------------------------------------------------------------------------------------------
+# ==================================================================================================
+# **************************************************************************************************
+#
+#  88        88  88888888888  88           88888888ba
+#  88        88  88           88           88      "8b
+#  88        88  88           88           88      ,8P
+#  88aaaaaaaa88  88aaaaa      88           88aaaaaa8P'
+#  88""""""""88  88"""""      88           88""""""'
+#  88        88  88           88           88
+#  88        88  88           88           88
+#  88        88  88888888888  88888888888  88
+#
+# --------------------------------------------------------------------------------------------------
+# HELP DOCS GO HERE:
+# --------------------------------------------------------------------------------------------------
+
+CLI_HELP_DOC="
+  CLI
+
+  Usage:
+
+    ./cli [--option]
+
+    bash ./cli [--option]
+
+    ./cli -h | --help
+
+    # Debug the script
+
+    ./cli --debug --clean
+
+  Options:
+
+    --debug             Turn on debug mode
+
+    --clean             Clean existing application build/test files
+
+    --ci                Continuous Integration (CI); Build + Test
+
+    -i, --install       Install application and dependencies
+
+    -b, --build         Build application
+
+    -s, --start         Start application (locally)
+
+    -t, --test          Run tests
+
+    -r, --report        Run scanner/reporting
+
+    -p, --publish       Publish the application
+
+    -d, --deploy        Deploy the application
+
+    --destroy           Destroy the application
+
+    -h, --help          CLI HELP
+"
+
+# **************************************************************************************************
+# ==================================================================================================
+# --------------------------------------------------------------------------------------------------
+
+
+# --------------------------------------------------------------------------------------------------
+# ==================================================================================================
+# **************************************************************************************************
+#
+#         db         88888888ba     ,ad8888ba,    ad88888ba
+#        d88b        88      "8b   d8"'    `"8b  d8"     "8b
+#       d8'`8b       88      ,8P  d8'            Y8,
+#      d8'  `8b      88aaaaaa8P'  88             `Y8aaaaa,
+#     d8YaaaaY8b     88""""88'    88      88888    `"""""8b,
+#    d8""""""""8b    88    `8b    Y8,        88          `8b
+#   d8'        `8b   88     `8b    Y8a.    .a88  Y8a     a8P
+#  d8'          `8b  88      `8b    `"Y88888P"    "Y88888P"
+#
+# --------------------------------------------------------------------------------------------------
+echo "Loading arguments" && echo ""
+# --------------------------------------------------------------------------------------------------
+# Arguments are sorted in the order they are played in the script
+# --------------------------------------------------------------------------------------------------
+
+RUN_DEBUG=false
+RUN_CLEAN=false
+RUN_INSTALL=false
+RUN_BUILD=false
+RUN_START=false
+RUN_TEST=false
+RUN_REPORT=false
+RUN_PUBLISH=false
+RUN_DEPLOY=false
+RUN_DESTROY=false
+
+for ARG in "$@"; do
+  case "$ARG" in
+    --help)
+      echo "${CLI_HELP_DOC}"
+      exit
+      ;;
+    -h)
+      echo "${CLI_HELP_DOC}"
+      exit
+      ;;
+
+    --env=*)
+      ENV=${ARG#--env=}
+      ;;
+
+    --debug)
+      RUN_DEBUG=true
+      ;;
+
+    --clean)
+      RUN_CLEAN=true
+      ;;
+
+    --ci)
+      RUN_BUILD=true
+      RUN_TEST=true
+      ;;
+
+    --install)
+      RUN_INSTALL=true
+      ;;
+    -i)
+      RUN_INSTALL=true
+      ;;
+
+    --build)
+      RUN_BUILD=true
+      ;;
+    -b)
+      RUN_BUILD=true
+      ;;
+
+    --start)
+      RUN_START=true
+      ;;
+    -s)
+      RUN_START=true
+      ;;
+
+    --test)
+      RUN_TEST=true
+      ;;
+    -t)
+      RUN_TEST=true
+      ;;
+
+    --report)
+      RUN_REPORT=true
+      ;;
+
+    --publish)
+      RUN_PUBLISH=true
+      ;;
+    -p)
+      RUN_PUBLISH=true
+      ;;
+
+    --deploy)
+      RUN_DEPLOY=true
+      ;;
+    -d)
+      RUN_DEPLOY=true
+      ;;
+
+    --destroy)
+      RUN_DESTROY=true
+      ;;
+
+    # ==============================================================================================
+    # ADDITIONAL ARGUMENTS GO HERE
+    # ==============================================================================================
+
+    --egg)
+      echo "The egg hatched."
+      echo "${__DATE}"
+      ;;
+
+    # ----------------------------------------------------------------------------------------------
+    # LEGEND:
+    # ----------------------------------------------------------------------------------------------
+    # Flag-based:
+    # --flag)
+    #   FLAG=true
+    #   ;;
+    # -f)
+    #   FLAG_SHORTHAND=true
+    #   ;;
+    # ----------------------------------------------------------------------------------------------
+    # String-based:
+    # --str=*)
+    #   STR=${ARG#--str=}
+    #   ;;
+    # ----------------------------------------------------------------------------------------------
+    # CSV-based:
+    # --csv=*)
+    #   CSV_STR=${ARG#--csv=}
+    #   CSV=( ${CSV_STR//,/ } )
+    #   ;;
+    # ----------------------------------------------------------------------------------------------
+
+    # ==============================================================================================
+    # Catch-all failure for unknown arguments
+    # ==============================================================================================
+    *)
+      echo "Unknown option $ARG."
+      exit 1
+      ;;
+  esac
+done
+
+# **************************************************************************************************
+# ==================================================================================================
+# --------------------------------------------------------------------------------------------------
+
+
+# --------------------------------------------------------------------------------------------------
+# ==================================================================================================
+# **************************************************************************************************
+#
+#  8b           d8   db         88888888ba    ad88888ba
+#  `8b         d8'  d88b        88      "8b  d8"     "8b
+#   `8b       d8'  d8'`8b       88      ,8P  Y8,
+#    `8b     d8'  d8'  `8b      88aaaaaa8P'  `Y8aaaaa,
+#     `8b   d8'  d8YaaaaY8b     88""""88'      `"""""8b,
+#      `8b d8'  d8""""""""8b    88    `8b            `8b
+#       `888'  d8'        `8b   88     `8b   Y8a     a8P
+#        `8'  d8'          `8b  88      `8b   "Y88888P"
+#
+# --------------------------------------------------------------------------------------------------
+echo "Loading/setting application variables" && echo ""
+# --------------------------------------------------------------------------------------------------
+# SHARED VARIABLES GO HERE:
+# --------------------------------------------------------------------------------------------------
+
+[[ -z "${ENV:-}" ]] && ENV="prod"
+
+# fail on empty/missing vars
+# [[ -z "${VAR_X:-}" ]] && { echo "Missing VAR_X" && exit 1 }
+# default values for empty/missing vars
+# [[ -z "${VAR_X}" ]] && VAR_X="default"
+# null default if var not available
+# VAR_Z="${VAR_Y:-}"
+# "default" if var not available
+# VAR_Z="${VAR_Y:"default"}"
+
+APP_NAME=$(node -p "require('./package.json').config.meta.keyname")
+APP_SEMVER=$(node -p "require('./package.json').version")
+# Apply datetime to SEMVER to support multiple builds/re-releases of the same version.
+APP_TAG="v$(lowercase "${APP_SEMVER}")-${__DATE//[^0-9]/}"
+APP_VERSION_LABEL="${APP_NAME}-${APP_TAG}"
+
+TF_VAR_build_path="${__DIR}/stub-nodejs"
+TF_VAR_temp_path="${TEMP_PATH}"
+TF_VAR_namespace=$(node -p "require('./package.json').config.meta.namespace")
+TF_VAR_app_name="${APP_NAME}"
+TF_VAR_app_origin=$(node -p "require('./package.json').repository")
+TF_VAR_app_author=$(node -p "require('./package.json').config.meta.tags.author")
+TF_VAR_app_category=$(node -p "require('./package.json').config.meta.tags.category")
+TF_VAR_app_title=$(node -p "require('./package.json').config.meta.tags.title")
+TF_VAR_app_service=$(node -p "require('./package.json').config.meta.tags.service")
+TF_VAR_app_description=$(node -p "require('./package.json').description")
+TF_VAR_app_version_label="${APP_VERSION_LABEL}"
+TF_VAR_app_ecs_memory=$(node -p "require('./package.json').config.meta.container.memory")
+TF_VAR_app_ecs_container_port=$(node -p "require('./package.json').config.meta.container.port")
+TF_VAR_app_ecs_host_port=$(node -p "require('./package.json').config.meta.host.port")
+TF_VAR_app_ci_s3_uri=$(lowercase "${APP_VERSION_LABEL}.zip")
+export TF_VAR_build_path
+export TF_VAR_temp_path
+export TF_VAR_namespace
+export TF_VAR_app_name
+export TF_VAR_app_origin
+export TF_VAR_app_author
+export TF_VAR_app_category
+export TF_VAR_app_title
+export TF_VAR_app_service
+export TF_VAR_app_description
+export TF_VAR_app_version_label
+export TF_VAR_app_ecs_memory
+export TF_VAR_app_ecs_container_port
+export TF_VAR_app_ecs_host_port
+export TF_VAR_app_ci_s3_uri
+
+# **************************************************************************************************
+# ==================================================================================================
+# --------------------------------------------------------------------------------------------------
+
+
+# --------------------------------------------------------------------------------------------------
+# ==================================================================================================
+# **************************************************************************************************
+#
+#    ,ad8888ba,   88           88888888888         db         888b      88
+#   d8"'    `"8b  88           88                 d88b        8888b     88
+#  d8'            88           88                d8'`8b       88 `8b    88
+#  88             88           88aaaaa          d8'  `8b      88  `8b   88
+#  88             88           88"""""         d8YaaaaY8b     88   `8b  88
+#  Y8,            88           88             d8""""""""8b    88    `8b 88
+#   Y8a.    .a8P  88           88            d8'        `8b   88     `8888
+#    `"Y8888Y"'   88888888888  88888888888  d8'          `8b  88      `888
+#
+# --------------------------------------------------------------------------------------------------
+if ( $RUN_CLEAN ) && ( $RUN_DEBUG ); then echo "DEBUG MODE: CLEAN scripting bypassed" && echo ""
+elif ( $RUN_CLEAN ); then echo "CLEAN script started" && echo ""
+# --------------------------------------------------------------------------------------------------
+# SCRIPTING GOES HERE:
+# --------------------------------------------------------------------------------------------------
+
+  # ----------------------------------------------------------------------------
+  # STEP 1: Remove all auto-generated content and directories
+
+  echo "Removing all auto-generated directories"
+  {
+    rm -rf \
+      .nyc_output \
+      .sonarlint \
+      coverage \
+      dist \
+      doc \
+      node_modules \
+      "$TEMP_BUILD_PATH"
+  } < /dev/null 2> /dev/null
+
+  # ----------------------------------------------------------------------------
+  # STEP 2: Cleaning cache(s)
+
+  # echo "Cleaning cache(s)"
+  # npm cache clean -g -f < /dev/null 2> /dev/null
+  # npm cache clean -f < /dev/null 2> /dev/null
+
+# --------------------------------------------------------------------------------------------------
+echo "CLEAN script completed successfully" && echo ""; fi
+# **************************************************************************************************
+# ==================================================================================================
+# --------------------------------------------------------------------------------------------------
+
+
+# --------------------------------------------------------------------------------------------------
+# ==================================================================================================
+# **************************************************************************************************
+#
+#  88  888b      88   ad88888ba  888888888888    db         88           88
+#  88  8888b     88  d8"     "8b      88        d88b        88           88
+#  88  88 `8b    88  Y8,              88       d8'`8b       88           88
+#  88  88  `8b   88  `Y8aaaaa,        88      d8'  `8b      88           88
+#  88  88   `8b  88    `"""""8b,      88     d8YaaaaY8b     88           88
+#  88  88    `8b 88          `8b      88    d8""""""""8b    88           88
+#  88  88     `8888  Y8a     a8P      88   d8'        `8b   88           88
+#  88  88      `888   "Y88888P"       88  d8'          `8b  88888888888  88888888888
+#
+# ==================================================================================================
+if ( $RUN_INSTALL ) && ( $RUN_DEBUG ); then echo "DEBUG MODE: Install scripting bypassed" && echo ""
+elif ( $RUN_INSTALL ); then echo "INSTALL script started" && echo ""
+# --------------------------------------------------------------------------------------------------
+# SCRIPTING GOES HERE:
+# --------------------------------------------------------------------------------------------------
+
+  # ----------------------------------------------------------------------------
+  # STEP 1: Install repostiory/application depedencies
+
+  if npm install; then
+    : # Successful
+  else
+    echo "INSTALL script failed while running 'npm install'"
+    exit 2
+  fi
+
+# --------------------------------------------------------------------------------------------------
+echo "INSTALL script completed successfully" && echo ""; fi
+# **************************************************************************************************
+# ==================================================================================================
+# --------------------------------------------------------------------------------------------------
+
+
+# --------------------------------------------------------------------------------------------------
+# ==================================================================================================
+# **************************************************************************************************
+#
+#  88888888ba   88        88  88  88           88888888ba,
+#  88      "8b  88        88  88  88           88      `"8b
+#  88      ,8P  88        88  88  88           88        `8b
+#  88aaaaaa8P'  88        88  88  88           88         88
+#  88""""""8b,  88        88  88  88           88         88
+#  88      `8b  88        88  88  88           88         8P
+#  88      a8P  Y8a.    .a8P  88  88           88      .a8P
+#  88888888P"    `"Y8888Y"'   88  88888888888  88888888Y"'
+#
+# ==================================================================================================
+if ( $RUN_BUILD ) && ( $RUN_DEBUG ); then echo "DEBUG MODE: BUILD scripting bypassed" && echo ""
+elif ( $RUN_BUILD ); then echo "BUILD script started" && echo ""
+# --------------------------------------------------------------------------------------------------
+# SCRIPTING GOES HERE:
+# --------------------------------------------------------------------------------------------------
+
+  # ----------------------------------------------------------------------------
+  # STEP 1: Remove/empty temp build paths
+
+  rm -rf "$TEMP_BUILD_PATH" 2> /dev/null
+
+  # ----------------------------------------------------------------------------
+  # STEP 2: Build application
+
+  echo "Building application"
+  if npm run build; then
+    : # Successful
+  else
+    echo "BUILD script failed while running 'npm run build'"
+    exit 2
+  fi
+
+# --------------------------------------------------------------------------------------------------
+echo "BUILD script completed successfully" && echo ""; fi
+# **************************************************************************************************
+# ==================================================================================================
+# --------------------------------------------------------------------------------------------------
+
+
+# --------------------------------------------------------------------------------------------------
+# ==================================================================================================
+# **************************************************************************************************
+#
+#   ad88888ba  888888888888    db         88888888ba  888888888888
+#  d8"     "8b      88        d88b        88      "8b      88
+#  Y8,              88       d8'`8b       88      ,8P      88
+#  `Y8aaaaa,        88      d8'  `8b      88aaaaaa8P'      88
+#    `"""""8b,      88     d8YaaaaY8b     88""""88'        88
+#          `8b      88    d8""""""""8b    88    `8b        88
+#  Y8a     a8P      88   d8'        `8b   88     `8b       88
+#   "Y88888P"       88  d8'          `8b  88      `8b      88
+#
+# ==================================================================================================
+if ( $RUN_START ) && ( $RUN_DEBUG ); then echo "DEBUG MODE: START scripting bypassed" && echo ""
+elif ( $RUN_START ); then echo "START script started" && echo ""
+# --------------------------------------------------------------------------------------------------
+# SCRIPTING GOES HERE:
+# --------------------------------------------------------------------------------------------------
+
+  # ----------------------------------------------------------------------------
+  # STEP 1: Starting application
+
+  echo "Starting application"
+  if npm run start; then
+    : # Successful
+  else
+    echo "START script failed while running 'npm run start'"
+    exit 2
+  fi
+
+# --------------------------------------------------------------------------------------------------
+echo "START script completed successfully" && echo ""; fi
+# **************************************************************************************************
+# ==================================================================================================
+# --------------------------------------------------------------------------------------------------
+
+
+# --------------------------------------------------------------------------------------------------
+# ==================================================================================================
+# **************************************************************************************************
+#
+#  888888888888  88888888888  ad88888ba  888888888888
+#       88       88          d8"     "8b      88
+#       88       88          Y8,              88
+#       88       88aaaaa     `Y8aaaaa,        88
+#       88       88"""""       `"""""8b,      88
+#       88       88                  `8b      88
+#       88       88          Y8a     a8P      88
+#       88       88888888888  "Y88888P"       88
+#
+# ==================================================================================================
+if ( $RUN_TEST ) && ( $RUN_DEBUG ); then echo "DEBUG MODE: Tests bypassed" && echo ""
+elif ( $RUN_TEST ); then echo "TEST script started" && echo ""
+# --------------------------------------------------------------------------------------------------
+# SCRIPTING GOES HERE:
+# --------------------------------------------------------------------------------------------------
+
+  # ----------------------------------------------------------------------------
+  # STEP 1: Run static analysis tests
+
+  echo "Running static analysis tests; Linter(s), etc."
+  if npm run lint; then
+    : # Successful
+  else
+    echo "TEST script failed while running 'npm run lint'"
+    exit 2
+  fi
+
+  if type "markdownlint" &> /dev/null; then
+    if markdownlint \
+      -i '**/node_modules/**' \
+      -c '.markdownlint.yaml' './'; then
+      : # Successful
+    else
+      echo "TEST script failed while running 'markdownlint'"
+      exit 2
+    fi
+  fi
+
+  if type "docker" &> /dev/null; then
+    if docker run --rm -v "$PWD:/mnt" koalaman/shellcheck \
+      scripts/*.sh \
+      cli \
+      ; then
+      : # Successful
+    else
+      echo "TEST script failed while running ShellCheck"
+      exit 2
+    fi
+  fi
+
+  # ----------------------------------------------------------------------------
+  # STEP 2: Run dynamic analysis tests
+
+  # echo "Running static/dynamic tests; unit, integration, regression, etc."
+  # if npm test; then
+  #   : # Successful
+  # else
+  #   echo "TEST script failed while running 'npm test'"
+  #   exit 2
+  # fi
+
+  # ----------------------------------------------------------------------------
+  # STEP 3: Run static+dynamic analysis on infrastructure-as-code
+
+  run_terraform "$TERRAFORM_PATH" "dev" "test"
+
+# --------------------------------------------------------------------------------------------------
+echo "TEST script completed successfully" && echo ""; fi
+# **************************************************************************************************
+# ==================================================================================================
+# --------------------------------------------------------------------------------------------------
+
+
+# --------------------------------------------------------------------------------------------------
+# ==================================================================================================
+# **************************************************************************************************
+#
+#  88888888ba   88888888888  88888888ba     ,ad8888ba,    88888888ba  888888888888
+#  88      "8b  88           88      "8b   d8"'    `"8b   88      "8b      88
+#  88      ,8P  88           88      ,8P  d8'        `8b  88      ,8P      88
+#  88aaaaaa8P'  88aaaaa      88aaaaaa8P'  88          88  88aaaaaa8P'      88
+#  88""""88'    88"""""      88""""""'    88          88  88""""88'        88
+#  88    `8b    88           88           Y8,        ,8P  88    `8b        88
+#  88     `8b   88           88            Y8a.    .a8P   88     `8b       88
+#  88      `8b  88888888888  88             `"Y8888Y"'    88      `8b      88
+#
+# ==================================================================================================
+if ( $RUN_REPORT ) && ( $RUN_DEBUG ); then echo "DEBUG MODE: REPORT scripting bypassed" && echo ""
+elif ( $RUN_REPORT ); then echo "REPORT script started" && echo ""
+# --------------------------------------------------------------------------------------------------
+# SCRIPTING GOES HERE:
+# --------------------------------------------------------------------------------------------------
+
+  # ----------------------------------------------------------------------------
+  # STEP 1: Publish code quality reports
+
+  # run_codecov "${__DIR}"
+
+  run_sonar_scanner "${__DIR}"
+
+# --------------------------------------------------------------------------------------------------
+echo "REPORT script completed successfully" && echo ""; fi
+# **************************************************************************************************
+# ==================================================================================================
+# --------------------------------------------------------------------------------------------------
+
+
+# --------------------------------------------------------------------------------------------------
+# ==================================================================================================
+# **************************************************************************************************
+#
+#  88888888ba   88        88  88888888ba   88           88   ad88888ba   88        88
+#  88      "8b  88        88  88      "8b  88           88  d8"     "8b  88        88
+#  88      ,8P  88        88  88      ,8P  88           88  Y8,          88        88
+#  88aaaaaa8P'  88        88  88aaaaaa8P'  88           88  `Y8aaaaa,    88aaaaaaaa88
+#  88""""""'    88        88  88""""""8b,  88           88    `"""""8b,  88""""""""88
+#  88           88        88  88      `8b  88           88          `8b  88        88
+#  88           Y8a.    .a8P  88      a8P  88           88  Y8a     a8P  88        88
+#  88            `"Y8888Y"'   88888888P"   88888888888  88   "Y88888P"   88        88
+#
+# ==================================================================================================
+if ( $RUN_PUBLISH ) && ( $RUN_DEBUG ); then echo "DEBUG MODE: PUBLISH scripting bypassed" && echo ""
+elif ( $RUN_PUBLISH ); then echo "PUBLISH script started" && echo ""
+# --------------------------------------------------------------------------------------------------
+# SCRIPTING GOES HERE:
+# --------------------------------------------------------------------------------------------------
+
+  # ----------------------------------------------------------------------------
+  # STEP 1: Run semantic-release; apply SEMVER, add release/tags/changelog to git repo
+
+  if npm run semantic-release; then
+    : # Successful
+  else
+    echo "PUBLISH script failed while running 'npm run semantic-release'"
+    exit 2
+  fi
+
+# --------------------------------------------------------------------------------------------------
+echo "PUBLISH script completed successfully" && echo ""; fi
+# **************************************************************************************************
+# ==================================================================================================
+# --------------------------------------------------------------------------------------------------
+
+
+# --------------------------------------------------------------------------------------------------
+# ==================================================================================================
+# **************************************************************************************************
+#
+#  88888888ba,    88888888888  88888888ba   88           ,ad8888ba,  8b        d8
+#  88      `"8b   88           88      "8b  88          d8"'    `"8b  Y8,    ,8P
+#  88        `8b  88           88      ,8P  88         d8'        `8b  Y8,  ,8P
+#  88         88  88aaaaa      88aaaaaa8P'  88         88          88   "8aa8"
+#  88         88  88"""""      88""""""'    88         88          88    `88'
+#  88         8P  88           88           88         Y8,        ,8P     88
+#  88      .a8P   88           88           88          Y8a.    .a8P      88
+#  88888888Y"'    88888888888  88           88888888888  `"Y8888Y"'       88
+#
+# ==================================================================================================
+if ( $RUN_DEPLOY ) && ( $RUN_DEBUG ); then echo "DEBUG MODE: DEPLOY scripting bypassed" && echo ""
+elif ( $RUN_DEPLOY ); then echo "DEPLOY script started" && echo ""
+# --------------------------------------------------------------------------------------------------
+# SCRIPTING GOES HERE:
+# --------------------------------------------------------------------------------------------------
+
+  # ----------------------------------------------------------------------------
+  # STEP 1: Capture SEMVER and reset/export app vars for proper tagging of release artifacts
+
+  APP_SEMVER=$(node -p "require('./package.json').version")
+  # Apply datetime to SEMVER to support multiple builds/re-releases of the same version.
+  APP_TAG="v$(lowercase "${APP_SEMVER}")-${__DATE//[^0-9]/}"
+  APP_VERSION_LABEL="${APP_NAME}-${APP_TAG}"
+
+  # ----------------------------------------------------------------------------
+  # STEP 2: Set/export runtime variables for Terraform
+
+  TF_VAR_app_version_label="${APP_VERSION_LABEL}"
+  TF_VAR_app_ci_s3_uri=$(lowercase "${APP_VERSION_LABEL}.zip")
+
+  # ----------------------------------------------------------------------------
+  # STEP 3: Create/update Beanstalk application environment
+
+  mkdir "${TEMP_PATH}"
+
+  run_terraform "$TERRAFORM_PATH" "dev" "apply"
+
+  [[ -e "${TEMP_PATH}" ]] && rm -rf "${TEMP_PATH}"
+
+  # ----------------------------------------------------------------------------
+  # STEP 4: Wait for healthy app enivornment before calling deployment a success
+
+  # DEPLOY_HEALTH="Red"
+  # DEPLOY_HEALTH_READY="Green"
+  # DEPLOY_RETRY_NUMBER=10
+  # DEPLOY_RETRY_INTERVAL=60
+  # DEPLOY_RETRY_COUNT=1
+  # while [[ $DEPLOY_RETRY_COUNT -le $DEPLOY_RETRY_NUMBER ]]; do
+  #   sh_info "Checking for 'Green' deployment-health-status (${DEPLOY_RETRY_COUNT}...)"
+  #   DEPLOY_RETRY_COUNT=$(( DEPLOY_RETRY_COUNT + 1 ))
+  #   DEPLOY_HEALTH=$(aws elasticbeanstalk describe-environments --environment-names "$APP_NAME_ENV" | jq -c -r ".Environments[0].Health")
+  #   sh_info "Current elasticbeanstalk health status - ${DEPLOY_HEALTH}"
+
+  #   [[ "${DEPLOY_HEALTH}" = "${DEPLOY_HEALTH_READY}" ]] && break
+
+  #   sh_info "Waiting For The Deployment To Finish"
+  #   sleep $DEPLOY_RETRY_INTERVAL
+  #   sh_info "${DEPLOY_RETRY_COUNT}"
+  # done
+
+  # if [[ "${DEPLOY_HEALTH}" = "${DEPLOY_HEALTH_READY}" ]]; then
+  #   sh_success "The deployment was successful!"
+  # else
+  #   sh_alert "Exceeded retry-limit (${DEPLOY_RETRY_NUMBER})."
+  #   sh_alert "Deployment Health Status: ${DEPLOY_HEALTH}"
+  #   [[ "${DEPLOY_HEALTH}" = "Red" ]] && sh_fail "The deployment was not successful!"
+  #   sh_alert "The deployment may not have been successful."
+  # fi
+
+# --------------------------------------------------------------------------------------------------
+echo "DEPLOY script completed successfully" && echo ""; fi
+# **************************************************************************************************
+# ==================================================================================================
+# --------------------------------------------------------------------------------------------------
+
+
+# --------------------------------------------------------------------------------------------------
+# ==================================================================================================
+# **************************************************************************************************
+#
+#  88888888ba,    88888888888  ad88888ba  888888888888  88888888ba     ,ad8888ba,  8b        d8
+#  88      `"8b   88          d8"     "8b      88       88      "8b   d8"'    `"8b  Y8,    ,8P
+#  88        `8b  88          Y8,              88       88      ,8P  d8'        `8b  Y8,  ,8P
+#  88         88  88aaaaa     `Y8aaaaa,        88       88aaaaaa8P'  88          88   "8aa8"
+#  88         88  88"""""       `"""""8b,      88       88""""88'    88          88    `88'
+#  88         8P  88                  `8b      88       88    `8b    Y8,        ,8P     88
+#  88      .a8P   88          Y8a     a8P      88       88     `8b    Y8a.    .a8P      88
+#  88888888Y"'    88888888888  "Y88888P"       88       88      `8b    `"Y8888Y"'       88
+#
+# ==================================================================================================
+if ( $RUN_DESTROY ) && ( $RUN_DEBUG ); then echo "DEBUG MODE: DESTROY scripting bypassed" && echo ""
+elif ( $RUN_DESTROY ); then echo "DESTROY script started" && echo ""
+# --------------------------------------------------------------------------------------------------
+# SCRIPTING GOES HERE:
+# --------------------------------------------------------------------------------------------------
+
+  # ----------------------------------------------------------------------------
+  # STEP 1: Destroy the infrastructure
+
+  run_terraform "$TERRAFORM_PATH" "dev" "destroy"
+
+# --------------------------------------------------------------------------------------------------
+echo "DESTROY script completed successfully" && echo ""; fi
+# **************************************************************************************************
+# ==================================================================================================
+# --------------------------------------------------------------------------------------------------
+
+
+# --------------------------------------------------------------------------------------------------
+# ==================================================================================================
+# **************************************************************************************************
+#
+#  888888888888  88        88  88888888888     88888888888  888b      88  88888888ba,
+#       88       88        88  88              88           8888b     88  88      `"8b
+#       88       88        88  88              88           88 `8b    88  88        `8b
+#       88       88aaaaaaaa88  88aaaaa         88aaaaa      88  `8b   88  88         88
+#       88       88""""""""88  88"""""         88"""""      88   `8b  88  88         88
+#       88       88        88  88              88           88    `8b 88  88         8P
+#       88       88        88  88              88           88     `8888  88      .a8P
+#       88       88        88  88888888888     88888888888  88      `888  88888888Y"'
+#
+# ==================================================================================================
+
+# group all of the variables in an array.
+declare -a ENV_VARS=(
+  "__DIR"
+  "__FILE"
+  "__BASE"
+  "__DATE"
+  "ENV"
+  "APP_NAME"
+  "APP_SEMVER"
+  "APP_TAG"
+  "TF_VAR_build_path"
+  "TF_VAR_temp_path"
+  "TF_VAR_namespace"
+  "TF_VAR_app_name"
+  "TF_VAR_app_origin"
+  "TF_VAR_app_author"
+  "TF_VAR_app_category"
+  "TF_VAR_app_title"
+  "TF_VAR_app_service"
+  "TF_VAR_app_description"
+  "TF_VAR_app_version_label"
+  "TF_VAR_app_ecs_memory"
+  "TF_VAR_app_ecs_container_port"
+  "TF_VAR_app_ecs_host_port"
+  "TF_VAR_app_ci_s3_uri"
+  # ADD ALL NON-SENSITIVE VARS HERE
+)
+
+echo "{"
+for var in "${ENV_VARS[@]}"; do
+  echo "  \"${var}\": \"${!var}\""
+done
+echo "}" && echo ""
+
+echo "CLI script completed successfully" && echo ""
+
+end=$(date +%s)
+runlen=$(echo "$end - $start" | bc)
+if type "python" &> /dev/null; then
+  runtime=$(python -c "print '%u:%02u' % ($runlen/60, $runlen%60)")
+else
+  runtime="$runlen seconds"
+fi
+echo "runtime: ${runtime}" && echo ""
