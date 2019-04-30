@@ -1,0 +1,46 @@
+language: node_js
+node_js:
+  - '8'
+cache:
+  directories:
+    - ~/.npm
+    - node_modules
+  npm: true
+notifications:
+  email: false
+addons:
+  sonarcloud:
+    organization: seantrane-github
+git:
+  depth: false
+branches:
+  only:
+    - master
+    - /^release.*$/
+before_install:
+  # package-lock.json was introduced in npm@5
+  - '[[ $(node -v) =~ ^v9.*$ ]] || npm install -g npm@latest' # skipped when using node 9
+  - npm install -g github-label-sync
+install:
+  - travis_retry ./cli -i
+stages:
+  - test
+  - name: deploy
+    if: repo = seantrane/terraform-aws-example-api
+        AND type != pull_request
+        AND branch = master
+jobs:
+  include:
+    - stage: test
+      name: 'Checks and Tests'
+      script:
+        # - npm audit
+        - commitlint-travis
+        - travis_retry github-label-sync -a "$GH_TOKEN" -l 'https://git.io/fAe5i' seantrane/terraform-aws-example-api
+        - ./cli -t --env=dev
+    - stage: deploy
+      name: 'Publish and Release'
+      script:
+        - ./cli -p
+        # Deployment disabled:
+        # - ./cli -p -d --env=dev
