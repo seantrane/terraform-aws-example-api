@@ -1,0 +1,16 @@
+version: '3.5'
+
+services:
+
+  api-example:
+    image: api-example:latest
+    container_name: api-example
+    build:
+      context: ./stub-nodejs
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    # volumes:
+    #   - './stub-nodejs:/usr/src/app:delegated'
+    ports:
+      - '8080:8080'
