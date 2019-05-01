@@ -88,6 +88,30 @@ Then, if required, make a copy of `.env.example` called `.env` and fill in requi
 ./cli --destroy --env=dev
 ```
 
+### CI/CD, Infrastructure and Deployment
+
+When running the `./cli --deploy --env=dev` command, the script will create infrastructure in the AWS account, using credentials and region variables provided in `.env` files (when running locally) - or as environment variables when running as an automated CI task.
+
+The `TF_VAR_namespace` variable in `.env` file will be used as a prefix in the naming convention applied to all AWS resources that get created. The resource naming convention prefix will appear as `<namespace>-<env>-<keyname>-...`, with `keyname` being set in the `config.meta.keyname` property of `package.json` file.
+
+The infrastructure-as-code will perform the following primary tasks, in order:
+
+1. Create ECR, _for Docker images storage_
+2. Create Container Definitions, _for ECS config_
+3. Create S3 Bucket, _for Container Definitions storage_
+4. Create VPC
+5. Create Subnets
+6. Create Beanstalk Application
+7. _Compress Container Definitions_
+8. _Upload Container Definitions zip file to S3_
+9. Create Beanstalk Application Version, _using Container Definitions file_
+10. Create Beanstalk Application Environment
+11. Deploy Beanstalk Application Version, _to Beanstalk Application Environment_
+
+The IAC takes advantage of [Terraform](https://www.terraform.io/) and [Terraform Modules provided by CloudPosse](https://docs.cloudposse.com/). Each module used in the IAC will create various other interdependent resources, such as; IAM resources, Autoscaling Groups, Security Groups, etc. These are intentionally not listed above to keep focus on the primary modules/resources being created.
+
+The `./cli --destroy --env=dev` command will delete all artifacts (S3 objects, images, etc.) and then destroy all resources in reverse of the order created.
+
 ---
 
 ## Support <a id="support"></a>
