@@ -2,9 +2,9 @@ version: '3.5'
 
 services:
 
-  api-example:
-    image: api-example:latest
-    container_name: api-example
+  poc-tf-example-api:
+    image: poc-tf-example-api:latest
+    container_name: poc-tf-example-api
     build:
       context: ./stub-nodejs
       dockerfile: Dockerfile
@@ -13,4 +13,4 @@ services:
     # volumes:
     #   - './stub-nodejs:/usr/src/app:delegated'
     ports:
-      - '8080:8080'
+      - '8200:8200'

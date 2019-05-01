@@ -40,16 +40,19 @@ RUN mkdir -p /usr/src/app
 WORKDIR /usr/src/app
 
 # copy artifact build from the 'build environment'
+COPY --from=builder /usr/src/app/api /usr/src/app/api
+COPY --from=builder /usr/src/app/controllers /usr/src/app/controllers
+COPY --from=builder /usr/src/app/node_modules /usr/src/app/node_modules
+COPY --from=builder /usr/src/app/service /usr/src/app/service
+COPY --from=builder /usr/src/app/utils /usr/src/app/utils
+
 COPY --from=builder \
-  /usr/src/app/api \
-  /usr/src/app/controllers \
-  /usr/src/app/node_modules \
-  /usr/src/app/service \
-  /usr/src/app/utils \
   /usr/src/app/index.js \
   /usr/src/app/package-lock.json \
   /usr/src/app/package.json \
   /usr/src/app/
+
+# RUN ls -al /usr/src/app
 
 EXPOSE 8200
 
